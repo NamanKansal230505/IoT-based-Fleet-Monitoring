@@ -1,0 +1,16 @@
+{
+  "name": "agri-vehicle-monitor",
+  "version": "1.0.0",
+  "description": "Local IoT dashboard for agriculture vehicle monitoring (ESP32 + GPS + MPU6050).",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

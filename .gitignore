@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Local databases / WAL
+server/data.db
+server/data.db-wal
+server/data.db-shm
+
+# Local secrets (use *.example.* templates instead)
+firmware/AgriTracker/config.h
+server/config.json
+
+# Build artifacts
+firmware/AgriTracker/build/
+*.bin
+*.elf
+*.map
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log

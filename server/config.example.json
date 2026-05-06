@@ -1,0 +1,6 @@
+{
+  "port": 3000,
+  "deviceToken": "change-me-shared-secret",
+  "offlineAfterSec": 30,
+  "minMoveMeters": 5
+}

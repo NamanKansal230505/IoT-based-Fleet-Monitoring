@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Krishi Yantra Track — Subsidy Vehicle Monitoring | Govt. of India</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- Govt utility strip -->
+<div class="util-strip">
+  <div class="container util-row">
+    <span>भारत सरकार &nbsp;|&nbsp; Government of India</span>
+    <span class="util-links">
+      <a href="#">Skip to main content</a>
+      <a href="#">A−</a><a href="#">A</a><a href="#">A+</a>
+      <a href="#">हिंदी</a>
+    </span>
+  </div>
+</div>
+
+<!-- Masthead -->
+<header class="masthead">
+  <div class="container masthead-row">
+    <div class="emblem">
+      <!-- Stylised national emblem placeholder (SVG) -->
+      <svg viewBox="0 0 64 64" width="56" height="56" aria-hidden="true">
+        <circle cx="32" cy="32" r="30" fill="none" stroke="#0b2545" stroke-width="2"/>
+        <circle cx="32" cy="32" r="9" fill="none" stroke="#0b2545" stroke-width="2"/>
+        <g stroke="#0b2545" stroke-width="2">
+          <line x1="32" y1="6"  x2="32" y2="58"/>
+          <line x1="6"  y1="32" x2="58" y2="32"/>
+          <line x1="13.6" y1="13.6" x2="50.4" y2="50.4"/>
+          <line x1="50.4" y1="13.6" x2="13.6" y2="50.4"/>
+          <line x1="32" y1="2"  x2="32" y2="10"/>
+          <line x1="32" y1="54" x2="32" y2="62"/>
+        </g>
+      </svg>
+    </div>
+    <div class="title-block">
+      <div class="ministry">Ministry of Agriculture &amp; Farmers' Welfare</div>
+      <h1 class="portal-title">Krishi Yantra Track</h1>
+      <div class="portal-sub">Subsidised Agricultural Vehicle Monitoring Portal</div>
+    </div>
+    <div class="portal-meta">
+      <span id="connBadge" class="badge offline">Disconnected</span>
+      <div class="meta-line">Session: <b id="sessionTime">—</b></div>
+      <div class="meta-line">Last sync: <b id="lastSync">—</b></div>
+    </div>
+  </div>
+</header>
+
+<!-- Primary nav -->
+<nav class="primary-nav">
+  <div class="container nav-row">
+    <a class="active" href="#dashboard">Dashboard</a>
+    <a href="#districts">Districts</a>
+    <a href="#vehicles">Vehicles</a>
+    <a href="#geofences">Geofences</a>
+    <a href="#alerts">Alerts</a>
+    <a href="#about">About</a>
+  </div>
+</nav>
+
+<main class="container main">
+
+  <!-- Hero stats -->
+  <section class="hero">
+    <div class="hero-text">
+      <h2>Real-time oversight of subsidy-funded agricultural vehicles</h2>
+      <p>Live tracking, geofence governance, and engine-utilisation analytics across registered districts. Field telemetry from on-board GPS &amp; IMU sensors flows directly into the National Monitoring Grid.</p>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-num" id="sTotal">0</div><div class="stat-lab">Registered vehicles</div></div>
+      <div class="stat-card good"><div class="stat-num" id="sOnline">0</div><div class="stat-lab">Online</div></div>
+      <div class="stat-card warn"><div class="stat-num" id="sEngine">0</div><div class="stat-lab">Engine running</div></div>
+      <div class="stat-card bad"><div class="stat-num" id="sBreach">0</div><div class="stat-lab">Geofence breach</div></div>
+    </div>
+  </section>
+
+  <!-- District selector -->
+  <section class="card" id="districts">
+    <div class="card-head">
+      <h3>Districts</h3>
+      <div class="filter-row">
+        <input id="districtSearch" placeholder="Search district…">
+      </div>
+    </div>
+    <div id="districtList" class="district-list"></div>
+  </section>
+
+  <!-- Map + side info -->
+  <section class="dual" id="dashboard">
+    <div class="card map-card">
+      <div class="card-head">
+        <h3 id="mapTitle">All districts</h3>
+        <div class="legend">
+          <span><i class="dot live"></i> Live (real)</span>
+          <span><i class="dot sim"></i> Simulated</span>
+          <span><i class="dot off"></i> Offline</span>
+        </div>
+      </div>
+      <div id="map"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3 id="vehicleHeadTitle">Vehicles</h3></div>
+      <div id="vehicleList" class="vehicle-list"></div>
+    </div>
+  </section>
+
+  <!-- Detail + alerts -->
+  <section class="dual" id="vehicles">
+    <div class="card">
+      <div class="card-head"><h3>Vehicle detail</h3></div>
+      <div id="detailEmpty" class="empty">Select a vehicle to view live telemetry.</div>
+      <div id="detailBody" class="detail" hidden>
+        <div class="detail-head">
+          <div>
+            <div class="detail-id" id="dId">—</div>
+            <div class="detail-meta"><span id="dDistrict">—</span> &middot; <span id="dBene">—</span> &middot; <span id="dReg">—</span></div>
+          </div>
+          <span id="dBadge" class="badge offline">Offline</span>
+        </div>
+        <div class="kv">
+          <div><span>Engine</span><b id="dEngine">—</b></div>
+          <div><span>Speed</span><b id="dSpeed">—</b></div>
+          <div><span>Location</span><b id="dLoc">—</b></div>
+          <div><span>Satellites</span><b id="dSats">—</b></div>
+          <div><span>HDOP</span><b id="dHdop">—</b></div>
+          <div><span>Vibration σ</span><b id="dVib">—</b></div>
+          <div><span>Last seen</span><b id="dSeen">—</b></div>
+          <div><span>Source</span><b id="dSource">—</b></div>
+        </div>
+        <h4>Today</h4>
+        <div class="kv">
+          <div><span>Distance</span><b id="dDist">0.00 km</b></div>
+          <div><span>Engine runtime</span><b id="dRun">00:00:00</b></div>
+          <div><span>Active fences</span><b id="dFences">0</b></div>
+        </div>
+        <h4>Speed (last 30 samples)</h4>
+        <canvas id="speedChart" height="120"></canvas>
+      </div>
+    </div>
+
+    <div class="card" id="alerts">
+      <div class="card-head"><h3>Alerts</h3>
+        <button id="ackAll" class="btn btn-ghost">Acknowledge all</button>
+      </div>
+      <ul id="alertsList" class="alerts"></ul>
+    </div>
+  </section>
+
+  <!-- Geofences -->
+  <section class="card" id="geofences">
+    <div class="card-head"><h3>Geofence governance</h3></div>
+    <p class="hint">Use the polygon / rectangle tool on the map above to draw a zone, then save it here. Inclusion zones alert when a vehicle <b>leaves</b>; exclusion zones alert when a vehicle <b>enters</b>.</p>
+    <div class="row">
+      <input id="fenceName" placeholder="Zone name (e.g. Farm Block A)">
+      <select id="fenceType">
+        <option value="inclusion">Inclusion (allowed area)</option>
+        <option value="exclusion">Exclusion (restricted area)</option>
+      </select>
+      <button id="fenceSave" class="btn btn-primary" disabled>Save drawn polygon</button>
+    </div>
+    <ul id="fenceList" class="fences"></ul>
+  </section>
+
+  <section class="card" id="about">
+    <div class="card-head"><h3>About this portal</h3></div>
+    <p>Krishi Yantra Track is a pilot platform for monitoring agricultural vehicles disbursed under state and central subsidy schemes. On-board telematics units transmit GPS coordinates and engine-state data over secure channels for compliance and utilisation review.</p>
+    <p class="hint">This is a development build. Live data is shown for the Ghaziabad pilot unit; other districts display simulated data for demonstration.</p>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div class="container footer-row">
+    <div>© Government of India · Ministry of Agriculture &amp; Farmers' Welfare</div>
+    <div>Krishi Yantra Track v1.0 · Pilot Build</div>
+  </div>
+</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
