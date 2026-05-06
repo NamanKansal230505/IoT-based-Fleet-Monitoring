@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  server:
+    name: Server (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: ['22', '24']
+    defaults:
+      run:
+        working-directory: ./server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - name: Syntax check
+        run: |
+          for f in *.js; do node --check "$f"; done
+      - name: Boot smoke test
+        run: |
+          cp config.example.json config.json
+          node server.js &
+          PID=$!
+          sleep 3
+          curl -fsS http://localhost:3000/api/summary
+          kill $PID
+
+  firmware:
+    name: Firmware compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install arduino-cli
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=/usr/local/bin sh
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32 \
+            --additional-urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli lib install "TinyGPSPlus"
+      - name: Prepare config
+        run: cp firmware/AgriTracker/config.example.h firmware/AgriTracker/config.h
+      - name: Compile
+        run: arduino-cli compile --fqbn esp32:esp32:esp32 firmware/AgriTracker
