@@ -279,6 +279,8 @@ function renderSummary() {
 }
 
 // ====== API ======
+let DEMO_MODE = false;
+
 async function api(p, opts = {}) {
   const r = await fetch(p, { headers: {'Content-Type':'application/json'}, ...opts });
   if (!r.ok) throw new Error(p + ' ' + r.status);
@@ -288,7 +290,9 @@ async function api(p, opts = {}) {
 async function loadHistory() {
   if (!S.selectedDevice) return;
   try {
-    const rows = await api('/api/history?deviceId=' + encodeURIComponent(S.selectedDevice));
+    const rows = DEMO_MODE
+      ? window.DEMO.getHistory(S.selectedDevice)
+      : await api('/api/history?deviceId=' + encodeURIComponent(S.selectedDevice));
     trail.setLatLngs(rows.filter(r => r.lat && r.lng).map(r => [r.lat, r.lng]));
   } catch {}
 }
@@ -296,7 +300,11 @@ async function saveFence() {
   const name = $('fenceName').value.trim();
   const type = $('fenceType').value;
   if (!name || !S.drawnPolygon) return;
-  await api('/api/geofences', { method:'POST', body: JSON.stringify({ name, type, polygon: S.drawnPolygon, districtId: S.selectedDistrictId }) });
+  if (DEMO_MODE) {
+    window.DEMO.addGeofence({ name, type, polygon: S.drawnPolygon, districtId: S.selectedDistrictId });
+  } else {
+    await api('/api/geofences', { method:'POST', body: JSON.stringify({ name, type, polygon: S.drawnPolygon, districtId: S.selectedDistrictId }) });
+  }
   $('fenceName').value = '';
   drawnItems.clearLayers();
   S.drawnPolygon = null;
@@ -304,14 +312,19 @@ async function saveFence() {
 }
 async function deleteFence(id) {
   if (!confirm('Delete this geofence?')) return;
-  await api('/api/geofences/' + id, { method:'DELETE' });
+  if (DEMO_MODE) window.DEMO.deleteGeofence(id);
+  else await api('/api/geofences/' + id, { method:'DELETE' });
 }
 async function toggleFence(id) {
   const f = S.geofences.find(x => x.id == id);
   if (!f) return;
-  await api('/api/geofences/' + id, { method:'PATCH', body: JSON.stringify({ active: !f.active }) });
+  if (DEMO_MODE) window.DEMO.toggleGeofence(id, !f.active);
+  else await api('/api/geofences/' + id, { method:'PATCH', body: JSON.stringify({ active: !f.active }) });
 }
-async function ackAlert(id) { await api('/api/alerts/' + id + '/ack', { method:'POST' }); }
+async function ackAlert(id) {
+  if (DEMO_MODE) window.DEMO.ackAlert(id);
+  else await api('/api/alerts/' + id + '/ack', { method:'POST' });
+}
 async function ackAllAlerts() {
   document.querySelectorAll('#alertsList li:not(.ack)').forEach(li => ackAlert(li.dataset.id));
 }
@@ -361,8 +374,61 @@ function connectWS() {
   };
 }
 
+// ====== Demo-mode handlers (mirror the WS message kinds) ======
+function applySnapshot(snap) {
+  S.districts = snap.districts || [];
+  S.geofences = snap.geofences || [];
+  S.alerts    = snap.alerts || [];
+  for (const d of (snap.devices || [])) S.devices.set(d.deviceId, d);
+  renderDistricts(); renderVehicles(); renderMapMarkers();
+  renderFences(); renderAlertsPanel(); renderSummary();
+}
+function applyTelemetry(stateMsg) {
+  S.devices.set(stateMsg.deviceId, stateMsg);
+  const mk = vehicleMarkers.get(stateMsg.deviceId);
+  if (mk) {
+    if (stateMsg.lat != null) mk.setLatLng([stateMsg.lat, stateMsg.lng]);
+    mk.setIcon(vehicleIcon(stateMsg));
+    mk.setTooltipContent(`<b>${escapeHtml(stateMsg.deviceId)}</b><br>${escapeHtml(stateMsg.beneficiary || '')}<br>${stateMsg.engineOn ? 'Engine ON' : 'Engine OFF'} · ${(stateMsg.speed||0).toFixed(1)} km/h`);
+  } else if (!S.selectedDistrictId || stateMsg.districtId === S.selectedDistrictId) {
+    renderMapMarkers();
+  }
+  if (stateMsg.deviceId === S.selectedDevice) renderDetail();
+  renderVehicles(); renderSummary();
+  $('lastSync').textContent = new Date().toLocaleTimeString();
+}
+
+function startDemoMode() {
+  DEMO_MODE = true;
+  $('connBadge').className = 'badge online';
+  $('connBadge').textContent = 'Demo';
+  applySnapshot(window.DEMO.snapshot());
+  window.DEMO.start({
+    telemetry: applyTelemetry,
+    alert: a => { S.alerts.unshift(a); addAlertRow(a, true); },
+    alertAck: id => {
+      const li = document.querySelector(`#alertsList li[data-id="${id}"]`);
+      if (li) li.classList.add('ack');
+    },
+    geofencesChanged: () => { S.geofences = window.DEMO.snapshot().geofences; renderFences(); },
+  });
+}
+
 // ====== Boot ======
 function tickClock() { $('sessionTime').textContent = new Date().toLocaleString(); }
 tickClock(); setInterval(tickClock, 1000);
 setInterval(() => { if (S.selectedDevice) renderDetail(); }, 1000); // refresh "ago"
-connectWS();
+
+// Probe for a real backend. If /api/districts isn't reachable, fall back to
+// the in-browser demo (this is what happens on Vercel / any static deploy).
+(async () => {
+  try {
+    const r = await fetch('/api/districts', { method: 'GET' });
+    const ct = r.headers.get('content-type') || '';
+    if (!r.ok || !ct.includes('application/json')) throw new Error('api unavailable');
+    await r.json();
+    connectWS();
+  } catch {
+    startDemoMode();
+  }
+})();
